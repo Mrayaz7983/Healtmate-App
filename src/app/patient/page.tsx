@@ -257,7 +257,7 @@ export default function PatientPortal() {
             <h1 className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 bg-clip-text text-transparent">Patient Portal</h1>
             <p className="text-gray-600 mt-2">Manage your medical reports, vitals, and track your health timeline with AI assistance.</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <Button onClick={() => setTab("dashboard")} variant={tab === "dashboard" ? undefined : "outline"}>Dashboard</Button>
             <Button onClick={() => setTab("upload")} variant={tab === "upload" ? undefined : "outline"}>Upload Report</Button>
             <Button onClick={() => setTab("vitals")} variant={tab === "vitals" ? undefined : "outline"}>Add Vitals</Button>
@@ -342,7 +342,7 @@ export default function PatientPortal() {
                   <Card className="border border-blue-200 bg-gradient-to-br from-white to-blue-50/50 shadow-2xl">
                     <CardHeader className="pb-4"><CardTitle className="text-xl font-bold text-blue-700">Upload Report</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-sm text-gray-600 mb-1">Date</label>
                           <Input type="date" value={uploadDate} onChange={(e) => setUploadDate(e.target.value)} className="bg-white border-blue-200" />
@@ -396,7 +396,7 @@ export default function PatientPortal() {
                   <Card className="border border-emerald-200 bg-gradient-to-br from-white to-emerald-50/50 shadow-2xl">
                     <CardHeader className="pb-4"><CardTitle className="text-xl font-bold text-emerald-700">Add Manual Vitals</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-sm text-gray-600 mb-1">Date</label>
                           <Input type="date" value={vDate} onChange={(e) => setVDate(e.target.value)} className="bg-white border-emerald-200" />
@@ -406,7 +406,7 @@ export default function PatientPortal() {
                           <Input type="number" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder="e.g., 70" className="bg-white border-emerald-200" />
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-sm text-gray-600 mb-1">BP Systolic</label>
                           <Input type="number" value={bpSys} onChange={(e) => setBpSys(e.target.value)} placeholder="e.g., 120" className="bg-white border-emerald-200" />

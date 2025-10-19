@@ -5,7 +5,6 @@ import Link from "next/link";
 import { gsap } from "gsap";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import Chatbot from "@/components/Chatbot";
 
 export default function Home() {
   const heroRef = useRef<HTMLDivElement | null>(null);
@@ -73,7 +72,7 @@ export default function Home() {
             </div>
             
             {/* Trust indicators */}
-            <div className="flex items-center gap-6 pt-2">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-6 pt-2 text-sm">
               <div className="flex items-center gap-2 text-gray-500 text-sm">
                 HIPAA Compliant
               </div>
@@ -95,7 +94,7 @@ export default function Home() {
                   <img
                     src="/medical-interface.jpg"
                     alt="Advanced medical technology interface"
-                    className="h-[400px] w-full object-cover"
+                    className="h-56 sm:h-72 md:h-[400px] w-full object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent" />
                   <div className="absolute bottom-6 left-6 right-6">
@@ -162,7 +161,7 @@ export default function Home() {
             </div>
             
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-8 mt-12 pt-8 border-t border-blue-200">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 sm:gap-8 mt-12 pt-8 border-t border-blue-200">
               <div className="text-center">
                 <div className="text-2xl font-bold text-gray-900 mb-1">99.9%</div>
                 <div className="text-sm text-gray-500">Uptime</div>
@@ -180,9 +179,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Floating Chatbot */}
-      <Chatbot />
-    </div>
+          </div>
   );
 }
 

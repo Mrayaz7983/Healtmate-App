@@ -1,6 +1,7 @@
   import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // Robust PDF.js loader that tries multiple builds
 async function loadPdfJs(): Promise<any> {
@@ -21,39 +22,59 @@ async function loadPdfJs(): Promise<any> {
   throw new Error(`Failed to load pdfjs-dist. Tried: ${errors.join(' | ')}`);
 }
 
+// Fallback text extractor using pdf-parse (pure Node, robust for many PDFs)
+async function extractTextWithPdfParse(input: Buffer | Uint8Array): Promise<string> {
+  const buffer = input instanceof Buffer ? input : Buffer.from(input);
+  try {
+    const mod: any = await import("pdf-parse");
+    const pdfParse = mod?.default ?? mod;
+    const res = await pdfParse(buffer);
+    return (res?.text || "").toString().trim();
+  } catch (e) {
+    return "";
+  }
+}
+
 // Use PDF.js in Node runtime to extract text (no external binaries)
 async function extractTextFromPdf(input: Buffer | Uint8Array): Promise<string> {
-  const pdfjsLib: any = await loadPdfJs();
-  const getDocument = pdfjsLib?.getDocument ?? pdfjsLib?.default?.getDocument;
-  if (typeof getDocument !== 'function') {
-    throw new Error('PDF.js failed to load. Please reinstall pdfjs-dist.');
-  }
-  const data = input instanceof Buffer ? new Uint8Array(input) : input;
-  const loadingTask = getDocument({ data, verbosity: 0, stopAtErrors: false, disableWorker: true });
-  const pdf = await loadingTask.promise;
-  let fullText = '';
-  for (let i = 1; i <= pdf.numPages; i++) {
-    try {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const items = (content.items as any[]).filter((it) => it.str && it.str.trim());
-      const lines: Record<number, string[]> = {};
-      for (const it of items) {
-        const y = Math.round((it as any).transform?.[5] ?? 0);
-        if (!lines[y]) lines[y] = [];
-        lines[y].push((it as any).str.trim());
-      }
-      const sorted = Object.keys(lines)
-        .map((y) => parseInt(y))
-        .sort((a, b) => b - a)
-        .map((y) => lines[y].join(' ').trim())
-        .filter((l) => l.length > 0);
-      if (sorted.length > 0) fullText += sorted.join('\n') + '\n\n';
-    } catch {
-      // continue
+  try {
+    const pdfjsLib: any = await loadPdfJs();
+    const getDocument = pdfjsLib?.getDocument ?? pdfjsLib?.default?.getDocument;
+    if (typeof getDocument !== 'function') {
+      throw new Error('PDF.js failed to load.');
     }
+    const data = input instanceof Buffer ? new Uint8Array(input) : input;
+    const loadingTask = getDocument({ data, verbosity: 0, stopAtErrors: false, disableWorker: true });
+    const pdf = await loadingTask.promise;
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      try {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const items = (content.items as any[]).filter((it) => it.str && it.str.trim());
+        const lines: Record<number, string[]> = {};
+        for (const it of items) {
+          const y = Math.round((it as any).transform?.[5] ?? 0);
+          if (!lines[y]) lines[y] = [];
+          lines[y].push((it as any).str.trim());
+        }
+        const sorted = Object.keys(lines)
+          .map((y) => parseInt(y))
+          .sort((a, b) => b - a)
+          .map((y) => lines[y].join(' ').trim())
+          .filter((l) => l.length > 0);
+        if (sorted.length > 0) fullText += sorted.join('\n') + '\n\n';
+      } catch {
+        // continue
+      }
+    }
+    const out = fullText.trim();
+    if (out) return out;
+  } catch {
+    // fall through to fallback
   }
-  return fullText.trim();
+  // Fallback path using pdf-parse
+  return await extractTextWithPdfParse(input);
 }
 
 export async function POST(req: NextRequest) {

@@ -138,6 +138,13 @@
     background-attachment: fixed;
     background-size: 140% 140%, 120% 120%, 160% 160%;
   }
+  @media (max-width: 640px) {
+    body {
+      /* iOS Safari performance: avoid janky scroll with fixed backgrounds on small screens */
+      background-attachment: scroll;
+      background-size: auto;
+    }
+  }
 
   /* Dark mode variant of the decorative background */
   .dark body, body.dark {
@@ -154,4 +161,12 @@
 /* Hide Next.js error overlay portal */
 nextjs-portal {
   display: none !important;
+}
+
+/* Utility: hide scrollbar for mobile horizontal strips */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
 }
