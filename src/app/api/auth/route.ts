@@ -1,9 +1,10 @@
+// MUST be first
+export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 
-export const runtime = "nodejs";
-
 // --- Configuration ---
+
 const JWT_COOKIE_NAME = "auth_token";
 const TOKEN_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
@@ -26,17 +27,18 @@ let cachedDb: any = null;
 
 // --- jsonwebtoken loader using Node createRequire (works with CJS in Next Node runtime) ---
 let jwtCache: any = null;
-async function getJwt(): Promise<any> {
+
+async function getJwt() {
   if (jwtCache) return jwtCache;
   try {
-    const { createRequire } = await import("module");
-    const req = createRequire(import.meta.url);
-    const mod = req("jsonwebtoken");
-    jwtCache = (mod as any).default || mod;
+    const mod = await import("jsonwebtoken");
+    jwtCache = mod && (mod as any).default ? (mod as any).default : mod;
     return jwtCache;
   } catch (e: any) {
-    const msg = e?.message || e?.toString?.() || "Unknown error requiring jsonwebtoken";
-    throw new Error(`JWT init failed: ${msg}. Ensure 'jsonwebtoken' is installed and runtime is 'nodejs'.`);
+    const msg = e?.message || String(e);
+    throw new Error(
+      `JWT init failed: ${msg}. Ensure 'jsonwebtoken' is installed and runtime is 'nodejs'.`
+    );
   }
 }
 
@@ -53,22 +55,28 @@ async function getDb(): Promise<any> {
     cachedDb = db;
     return db;
   } catch (e: any) {
-    const msg = e?.message || e?.toString?.() || "Unknown error importing mongodb";
-    throw new Error(`MongoDB init failed: ${msg}. Ensure 'mongodb' is installed and MONGODB_URI is valid.`);
+    const msg =
+      e?.message || e?.toString?.() || "Unknown error importing mongodb";
+    throw new Error(
+      `MongoDB init failed: ${msg}. Ensure 'mongodb' is installed and MONGODB_URI is valid.`
+    );
   }
 }
 
 // --- JWT helpers ---
-async function signToken(payload: object) {
-  if (!JWT_SECRET) throw new Error("JWT_SECRET missing");
+async function signToken(payload: any) {
+  if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET missing");
   const jwt = await getJwt();
-  return jwt.sign(payload, JWT_SECRET, { algorithm: "HS256", expiresIn: TOKEN_TTL_SECONDS });
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    algorithm: "HS256",
+    expiresIn: 60 * 60 * 24 * 7,
+  });
 }
 
 async function verifyToken(token: string) {
-  if (!JWT_SECRET) throw new Error("JWT_SECRET missing");
+  if (!process.env.JWT_SECRET) throw new Error("JWT_SECRET missing");
   const jwt = await getJwt();
-  return jwt.verify(token, JWT_SECRET) as { sub: string; email: string; name?: string; iat: number; exp: number };
+  return jwt.verify(token, process.env.JWT_SECRET);
 }
 
 function setAuthCookie(res: NextResponse, token: string) {
@@ -102,9 +110,18 @@ async function getUserFromRequest(req: NextRequest) {
     const decoded = await verifyToken(token);
     const db = await getDb();
     const { ObjectId } = await import("mongodb");
-    const user = await db.collection("users").findOne({ _id: new ObjectId(decoded.sub) }, { projection: { passwordHash: 0 } });
+    const user = await db
+      .collection("users")
+      .findOne(
+        { _id: new ObjectId(decoded.sub) },
+        { projection: { passwordHash: 0 } }
+      );
     if (!user) return null;
-    return { id: user._id.toString(), name: (user as any).name, email: (user as any).email } as { id: string; name: string; email: string };
+    return {
+      id: user._id.toString(),
+      name: (user as any).name,
+      email: (user as any).email,
+    } as { id: string; name: string; email: string };
   } catch {
     return null;
   }
@@ -118,21 +135,36 @@ export async function GET(req: NextRequest) {
     if (!me) return NextResponse.json({ user: null }, { status: 401 });
     return NextResponse.json({ user: me });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || "Failed to load session" }, { status: 500 });
+    return NextResponse.json(
+      { error: err?.message || "Failed to load session" },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(req: NextRequest) {
   // POST /api/auth with { action: 'signup' | 'signin' | 'signout', ... }
+  console.log("DEBUG: MONGODB_URI set?", !!process.env.MONGODB_URI);
+  console.log(
+    "DEBUG: MONGODB_DB_NAME:",
+    process.env.MONGODB_DB_NAME || "not-set"
+  );
+  console.log("DEBUG: JWT_SECRET set?", !!process.env.JWT_SECRET);
+
   let body: any;
   try {
     body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  } catch (err: any) {
+    console.error(
+      "POST /api/auth error:",
+      err && (err.stack || err.message || err)
+    );
+    // existing response return...
   }
 
   const action = body?.action as string | undefined;
-  if (!action) return NextResponse.json({ error: "Missing action" }, { status: 400 });
+  if (!action)
+    return NextResponse.json({ error: "Missing action" }, { status: 400 });
 
   try {
     switch (action) {
@@ -146,10 +178,16 @@ export async function POST(req: NextRequest) {
         return res;
       }
       default:
-        return NextResponse.json({ error: "Unsupported action" }, { status: 400 });
+        return NextResponse.json(
+          { error: "Unsupported action" },
+          { status: 400 }
+        );
     }
   } catch (err: any) {
-    const message = err?.code === 11000 ? "Email already registered" : err?.message || "Request failed";
+    const message =
+      err?.code === 11000
+        ? "Email already registered"
+        : err?.message || "Request failed";
     const status = message === "Email already registered" ? 409 : 400;
     return NextResponse.json({ error: message }, { status });
   }
@@ -161,21 +199,38 @@ async function handleSignup(body: any) {
   const email = (body?.email || "").toString().toLowerCase().trim();
   const password = (body?.password || "").toString();
 
-  if (!name || !email || !password) return NextResponse.json({ error: "Name, email and password are required" }, { status: 400 });
-  if (password.length < 6) return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });
+  if (!name || !email || !password)
+    return NextResponse.json(
+      { error: "Name, email and password are required" },
+      { status: 400 }
+    );
+  if (password.length < 6)
+    return NextResponse.json(
+      { error: "Password must be at least 6 characters" },
+      { status: 400 }
+    );
 
   const db = await getDb();
   const existing = await db.collection("users").findOne({ email });
-  if (existing) return NextResponse.json({ error: "Email already registered" }, { status: 409 });
+  if (existing)
+    return NextResponse.json(
+      { error: "Email already registered" },
+      { status: 409 }
+    );
 
   const passwordHash = await bcrypt.hash(password, 10);
   const now = new Date();
-  const insertRes = await db.collection("users").insertOne({ name, email, passwordHash, createdAt: now, updatedAt: now });
+  const insertRes = await db
+    .collection("users")
+    .insertOne({ name, email, passwordHash, createdAt: now, updatedAt: now });
 
   const userId = insertRes.insertedId.toString();
   const token = await signToken({ sub: userId, email, name });
 
-  const res = NextResponse.json({ user: { id: userId, name, email } }, { status: 201 });
+  const res = NextResponse.json(
+    { user: { id: userId, name, email } },
+    { status: 201 }
+  );
   setAuthCookie(res, token);
   return res;
 }
@@ -183,18 +238,34 @@ async function handleSignup(body: any) {
 async function handleSignin(body: any) {
   const email = (body?.email || "").toString().toLowerCase().trim();
   const password = (body?.password || "").toString();
-  if (!email || !password) return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
+  if (!email || !password)
+    return NextResponse.json(
+      { error: "Email and password are required" },
+      { status: 400 }
+    );
 
   const db = await getDb();
   const user = await db.collection("users").findOne({ email });
-  if (!user) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+  if (!user)
+    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
 
   const ok = await bcrypt.compare(password, (user as any).passwordHash || "");
-  if (!ok) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+  if (!ok)
+    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
 
-  const token = await signToken({ sub: (user as any)._id.toString(), email: (user as any).email, name: (user as any).name });
+  const token = await signToken({
+    sub: (user as any)._id.toString(),
+    email: (user as any).email,
+    name: (user as any).name,
+  });
 
-  const res = NextResponse.json({ user: { id: (user as any)._id.toString(), name: (user as any).name, email: (user as any).email } });
+  const res = NextResponse.json({
+    user: {
+      id: (user as any)._id.toString(),
+      name: (user as any).name,
+      email: (user as any).email,
+    },
+  });
   setAuthCookie(res, token);
   return res;
 }
