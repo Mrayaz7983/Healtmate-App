@@ -24,14 +24,19 @@ if (!JWT_SECRET) {
 let cachedClient: any = null;
 let cachedDb: any = null;
 
-// --- jsonwebtoken dynamic loader to avoid build-time crashes ---
+// --- jsonwebtoken loader using Node createRequire (works with CJS in Next Node runtime) ---
+let jwtCache: any = null;
 async function getJwt(): Promise<any> {
+  if (jwtCache) return jwtCache;
   try {
-    const mod = await import("jsonwebtoken");
-    return (mod as any).default || mod;
+    const { createRequire } = await import("module");
+    const req = createRequire(import.meta.url);
+    const mod = req("jsonwebtoken");
+    jwtCache = (mod as any).default || mod;
+    return jwtCache;
   } catch (e: any) {
-    const msg = e?.message || e?.toString?.() || "Unknown error importing jsonwebtoken";
-    throw new Error(`JWT init failed: ${msg}. Ensure 'jsonwebtoken' is installed.`);
+    const msg = e?.message || e?.toString?.() || "Unknown error requiring jsonwebtoken";
+    throw new Error(`JWT init failed: ${msg}. Ensure 'jsonwebtoken' is installed and runtime is 'nodejs'.`);
   }
 }
 
